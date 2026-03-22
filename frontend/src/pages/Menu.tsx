@@ -4,6 +4,7 @@ import { Axios } from "../api/api";
 import Loading from "../ui/Loading";
 import { env } from "../config/env";
 import cartService from "../api/services/cartService";
+import orderService from "../api/services/orderService";
 import type { IUser } from "../types/auth";
 import type { ICartItem } from "../types/cart";
 import type { ApiResponse } from "../api/types";
@@ -16,8 +17,6 @@ type Product = {
   image: string;
 };
 
-const categories = ["All", "Pizza", "Burgers", "Drinks", "Desserts"];
-
 function Menu() {
   const [cart, setCart] = useState<ICartItem[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
@@ -28,6 +27,8 @@ function Menu() {
   const [cartLoading, setCartLoading] = useState(false);
   const [cartError, setCartError] = useState("");
   const [cartSuccess, setCartSuccess] = useState("");
+  const [checkoutLoading, setCheckoutLoading] = useState(false);
+  const [toastMessage, setToastMessage] = useState("");
   const cartRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -91,6 +92,29 @@ function Menu() {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
+  useEffect(() => {
+    if (!toastMessage) {
+      return;
+    }
+
+    const timer = window.setTimeout(() => {
+      setToastMessage("");
+    }, 3000);
+
+    return () => window.clearTimeout(timer);
+  }, [toastMessage]);
+
+  const categories = [
+    "All",
+    ...Array.from(
+      new Set(
+        products
+          .map((product) => product.category)
+          .filter((category) => category && category.trim().length > 0),
+      ),
+    ),
+  ];
+
   const filteredProducts =
     selectedCategory === "All"
       ? products
@@ -119,6 +143,52 @@ function Menu() {
       }
     } finally {
       setCartLoading(false);
+    }
+  };
+
+  const removeFromCart = async (productId: string) => {
+    setCartLoading(true);
+    setCartError("");
+    setCartSuccess("");
+
+    try {
+      const response = await cartService.removeItem(productId);
+      setCart(response.data.items ?? []);
+    } catch (error: any) {
+      if (error.response?.data?.data?.message) {
+        setCartError(error.response.data.data.message);
+      } else {
+        setCartError("Failed to remove item from cart.");
+      }
+    } finally {
+      setCartLoading(false);
+    }
+  };
+
+  const handleCheckout = async () => {
+    if (!currentUser) {
+      setCartError("Please log in before ordering.");
+      setCartSuccess("");
+      return;
+    }
+
+    setCheckoutLoading(true);
+    setCartError("");
+    setCartSuccess("");
+
+    try {
+      await orderService.createOrder();
+      setCart([]);
+      setToastMessage("Checkout completed");
+      setCartSuccess("Order completed.");
+    } catch (error: any) {
+      if (error.response?.data?.data?.message) {
+        setCartError(error.response.data.data.message);
+      } else {
+        setCartError("Failed to complete order.");
+      }
+    } finally {
+      setCheckoutLoading(false);
     }
   };
 
@@ -206,10 +276,20 @@ function Menu() {
                         {cart.map((item) => (
                           <li
                             key={item.productId}
-                            className="py-2 flex justify-between"
+                            className="py-2 flex items-center justify-between gap-3"
                           >
-                            <span>{item.title} x {item.quantity}</span>
-                            <span>${item.price * item.quantity}</span>
+                            <div>
+                              <div>{item.title} x {item.quantity}</div>
+                              <div className="text-sm text-gray-500">
+                                ${item.price * item.quantity}
+                              </div>
+                            </div>
+                            <button
+                              onClick={() => removeFromCart(item.productId)}
+                              className="rounded bg-red-500 px-2 py-1 text-xs text-white hover:bg-red-600"
+                            >
+                              Delete
+                            </button>
                           </li>
                         ))}
                       </ul>
@@ -217,6 +297,13 @@ function Menu() {
                       <div className="mt-2 font-bold text-right">
                         Total: ${totalPrice}
                       </div>
+                      <button
+                        onClick={handleCheckout}
+                        disabled={checkoutLoading}
+                        className="mt-3 w-full rounded bg-orange-500 px-4 py-2 text-white hover:bg-orange-600 disabled:opacity-50"
+                      >
+                        {checkoutLoading ? "Processing..." : "Checkout"}
+                      </button>
                     </>
                   )}
                 </div>
@@ -226,46 +313,57 @@ function Menu() {
         </div>
       </header>
 
-      <div className="max-w-7xl mx-auto px-4 py-6 flex space-x-4 overflow-x-auto">
-        {categories.map((cat) => (
-          <button
-            key={cat}
-            onClick={() => setSelectedCategory(cat)}
-            className={`px-4 py-2 rounded-full font-semibold border transition ${
-              selectedCategory === cat
-                ? "bg-orange-500 text-white border-orange-500"
-                : "bg-white text-gray-700 border-gray-300 hover:bg-orange-100"
-            }`}
-          >
-            {cat}
-          </button>
-        ))}
-      </div>
-
-      <main className="max-w-7xl mx-auto px-4 py-6 grid gap-6 grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
-        {filteredProducts.map((product) => (
-          <div
-            key={product._id}
-            className="bg-white rounded-lg shadow hover:shadow-lg transition overflow-hidden"
-          >
-            <img
-              src={env.VITE_BACKEND_URL + product.image}
-              alt={product.title}
-              className="h-48 w-full object-cover"
-            />
-            <div className="p-4 flex flex-col justify-between h-40">
-              <h3 className="text-lg font-bold">{product.title}</h3>
-              <p className="text-gray-600">${product.price}</p>
-              <button
-                onClick={() => addToCart(product)}
-                className="mt-2 bg-orange-500 text-white px-4 py-2 rounded hover:bg-orange-600"
-              >
-                Add to Cart
-              </button>
+      <section className="max-w-7xl mx-auto px-4 py-6">
+        <h2 className="mb-6 text-2xl font-bold text-gray-800">Products</h2>
+        <div className="mb-6 flex flex-wrap gap-3">
+          {categories.map((category) => (
+            <button
+              key={category}
+              onClick={() => setSelectedCategory(category)}
+              className={`rounded-full border px-4 py-2 text-sm font-medium transition ${
+                selectedCategory === category
+                  ? "border-orange-500 bg-orange-500 text-white"
+                  : "border-gray-300 bg-white text-gray-700 hover:bg-orange-50"
+              }`}
+            >
+              {category}
+            </button>
+          ))}
+        </div>
+        <main className="grid gap-6 grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
+          {filteredProducts.map((product) => (
+            <div
+              key={product._id}
+              className="bg-white rounded-lg shadow hover:shadow-lg transition overflow-hidden"
+            >
+              <img
+                src={env.VITE_BACKEND_URL + product.image}
+                alt={product.title}
+                className="h-48 w-full object-cover"
+              />
+              <div className="p-4 flex flex-col justify-between h-40">
+                <p className="mb-2 inline-block rounded-full bg-orange-100 px-2 py-1 text-xs font-medium text-orange-700">
+                  {product.category || "Uncategorized"}
+                </p>
+                <h3 className="text-lg font-bold">{product.title}</h3>
+                <p className="text-gray-600">${product.price}</p>
+                <button
+                  onClick={() => addToCart(product)}
+                  className="mt-2 bg-orange-500 text-white px-4 py-2 rounded hover:bg-orange-600"
+                >
+                  Add to Cart
+                </button>
+              </div>
             </div>
-          </div>
-        ))}
-      </main>
+          ))}
+        </main>
+      </section>
+
+      {toastMessage && (
+        <div className="fixed bottom-5 right-5 z-[60] rounded-lg bg-green-600 px-4 py-3 text-sm font-medium text-white shadow-lg">
+          {toastMessage}
+        </div>
+      )}
     </div>
   );
 }

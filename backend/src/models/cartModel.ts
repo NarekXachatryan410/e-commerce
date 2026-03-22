@@ -43,4 +43,10 @@ const cartSchema = new Schema<ICart>(
     { timestamps: true }
 );
 
+// Supports one-cart-per-user lookup, the app's main cart query path.
+cartSchema.index({ userId: 1 }, { unique: true });
+
+// Supports future cleanup/reporting of stale carts.
+cartSchema.index({ updatedAt: -1 });
+
 export const Cart = model("Cart", cartSchema);

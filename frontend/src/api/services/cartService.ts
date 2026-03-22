@@ -12,6 +12,11 @@ class CartService {
     const response = await Axios.post<ApiResponse<ICart>>("/cart/items", { productId });
     return response.data;
   }
+
+  async removeItem(productId: string) {
+    const response = await Axios.delete<ApiResponse<ICart>>(`/cart/items/${productId}`);
+    return response.data;
+  }
 }
 
 export default new CartService();

@@ -53,5 +53,11 @@ productRouter.post(
   upload.single("image"),
   productController.createProduct,
 );
+productRouter.delete(
+  "/:productId",
+  authMiddleware,
+  adminMiddleware,
+  productController.deleteProduct,
+);
 
 export { productRouter };

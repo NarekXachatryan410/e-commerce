@@ -1,45 +1,23 @@
 import type { Request, Response } from "express";
-import { Product } from "../models/productModel";
 import { Order } from "../models/orderModel";
+import { Cart } from "../models/cartModel";
 import { errorResponse, successResponse } from "../utils/responses";
 
 class OrderController {
     async createOrder(req: Request, res: Response) {
         try {
-            const items = req.body.items;
+            const cart = await Cart.findOne({ userId: req.user.id });
 
-            if (!Array.isArray(items) || items.length === 0) {
-                return errorResponse(res, "Order items are required");
+            if (!cart || cart.items.length === 0) {
+                return errorResponse(res, "Cart is empty");
             }
 
-            const normalizedItems = items.reduce((acc: Record<string, number>, item: { productId?: string; quantity?: number }) => {
-                if (!item.productId) {
-                    return acc;
-                }
-
-                const quantity = Number(item.quantity) || 1;
-                acc[item.productId] = (acc[item.productId] || 0) + quantity;
-                return acc;
-            }, {});
-
-            const productIds = Object.keys(normalizedItems);
-
-            if (productIds.length === 0) {
-                return errorResponse(res, "Valid order items are required");
-            }
-
-            const products = await Product.find({ _id: { $in: productIds } });
-
-            if (products.length !== productIds.length) {
-                return errorResponse(res, "Some products were not found", 404);
-            }
-
-            const orderItems = products.map((product) => ({
-                productId: product._id,
-                title: product.title,
-                price: product.price,
-                image: product.image,
-                quantity: normalizedItems[String(product._id)]
+            const orderItems = cart.items.map((item) => ({
+                productId: item.productId,
+                title: item.title,
+                price: item.price,
+                image: item.image,
+                quantity: item.quantity
             }));
 
             const totalPrice = orderItems.reduce((sum, item) => sum + item.price * item.quantity, 0);
@@ -50,6 +28,9 @@ class OrderController {
                 totalPrice,
                 status: "pending"
             });
+
+            cart.items = [] as any;
+            await cart.save();
 
             return successResponse(res, order, 201);
         } catch (error) {
@@ -65,6 +46,38 @@ class OrderController {
         } catch (error) {
             console.error("Error fetching orders:", error);
             return errorResponse(res, "Failed to fetch orders");
+        }
+    }
+
+    async getAllOrders(req: Request, res: Response) {
+        try {
+            const orders = await Order.find()
+                .populate("userId", "username role")
+                .sort({ createdAt: -1 });
+
+            return successResponse(res, orders);
+        } catch (error) {
+            console.error("Error fetching all orders:", error);
+            return errorResponse(res, "Failed to fetch orders");
+        }
+    }
+
+    async completeOrder(req: Request, res: Response) {
+        try {
+            const { orderId } = req.params;
+            const order = await Order.findById(orderId);
+
+            if (!order) {
+                return errorResponse(res, "Order not found", 404);
+            }
+
+            order.status = "completed";
+            await order.save();
+
+            return successResponse(res, order);
+        } catch (error) {
+            console.error("Error completing order:", error);
+            return errorResponse(res, "Failed to complete order");
         }
     }
 }

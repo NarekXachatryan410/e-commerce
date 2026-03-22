@@ -1,10 +1,10 @@
 import { Axios } from "../api";
 import type { ApiResponse } from "../types";
-import type { IOrder, IOrderItemPayload } from "../../types/order";
+import type { IOrder } from "../../types/order";
 
 class OrderService {
-  async createOrder(items: IOrderItemPayload[]) {
-    const response = await Axios.post<ApiResponse<IOrder>>("/orders", { items });
+  async createOrder() {
+    const response = await Axios.post<ApiResponse<IOrder>>("/orders");
     return response.data;
   }
 

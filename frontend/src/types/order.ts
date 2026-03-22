@@ -1,8 +1,3 @@
-export interface IOrderItemPayload {
-  productId: string;
-  quantity: number;
-}
-
 export interface IOrderItem {
   productId: string;
   title: string;

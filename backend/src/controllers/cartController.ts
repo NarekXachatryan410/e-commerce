@@ -65,6 +65,29 @@ class CartController {
             return errorResponse(res, "Failed to add to cart");
         }
     }
+
+    async removeFromCart(req: Request, res: Response) {
+        try {
+            const { productId } = req.params;
+
+            const cart = await Cart.findOne({ userId: req.user.id });
+
+            if (!cart) {
+                return successResponse(res, { items: [] });
+            }
+
+            cart.items = cart.items.filter(
+                (item) => String(item.productId) !== String(productId)
+            ) as any;
+
+            await cart.save();
+
+            return successResponse(res, cart);
+        } catch (error) {
+            console.error("Error removing from cart:", error);
+            return errorResponse(res, "Failed to remove item from cart");
+        }
+    }
 }
 
 export default new CartController();

@@ -5,12 +5,12 @@ import { successResponse, errorResponse } from "../utils/responses";
 class ProductController {
     async createProduct(req: Request, res: Response) {
         try {
-            const { title, description, price } = req.body;
+            const { title, description, price, category } = req.body;
             const image = req.file;
 
             // Validation
-            if (!title || !description || !price) {
-                return errorResponse(res, "Title, description, and price are required");
+            if (!title || !description || !price || !category) {
+                return errorResponse(res, "Title, description, price, and category are required");
             }
 
             if (!image) {
@@ -22,6 +22,7 @@ class ProductController {
                 title: title.trim(),
                 description: description.trim(),
                 price: parseFloat(price),
+                category: category.trim(),
                 image: `/uploads/${image.filename}`,
                 userId: req.user.id
             });
@@ -33,7 +34,8 @@ class ProductController {
                 title: savedProduct.title,
                 description: savedProduct.description,
                 price: savedProduct.price,
-                image: savedProduct.image
+                image: savedProduct.image,
+                category: savedProduct.category
             }, 201);
 
         } catch (error) {
@@ -49,6 +51,22 @@ class ProductController {
         } catch (error) {
             console.error("Error fetching products:", error);
             return errorResponse(res, "Failed to fetch products");
+        }
+    }
+
+    async deleteProduct(req: Request, res: Response) {
+        try {
+            const { productId } = req.params;
+            const deletedProduct = await Product.findByIdAndDelete(productId);
+
+            if (!deletedProduct) {
+                return errorResponse(res, "Product not found", 404);
+            }
+
+            return successResponse(res, { message: "Product deleted successfully" });
+        } catch (error) {
+            console.error("Error deleting product:", error);
+            return errorResponse(res, "Failed to delete product");
         }
     }
 }

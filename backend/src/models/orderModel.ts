@@ -49,4 +49,10 @@ const orderSchema = new Schema<IOrder>(
     { timestamps: true }
 );
 
+// Supports per-user order history sorted by newest first.
+orderSchema.index({ userId: 1, createdAt: -1 });
+
+// Supports admin order listing and future status filtering.
+orderSchema.index({ status: 1, createdAt: -1 });
+
 export const Order = model("Order", orderSchema);
